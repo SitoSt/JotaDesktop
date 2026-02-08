@@ -1,0 +1,197 @@
+---
+
+---
+
+<div class="chat-container">
+  <div id="chat-messages" class="messages"></div>
+  <div class="input-area">
+    <input type="text" id="chat-input" placeholder="Type a message..." />
+    <button id="send-btn">Send</button>
+  </div>
+</div>
+
+<script>
+  const userId = "user_" + Math.floor(Math.random() * 1000);
+  const wsUrl = `ws://green-house.local/api/jota/ws/chat/${userId}`;
+  let ws;
+  const messagesDiv = document.getElementById("chat-messages");
+  const input = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("send-btn");
+  let currentMessageDiv = null;
+
+  function connect() {
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log("Connected to Jota Orchestrator");
+      appendSystemMessage("Connected to Jota");
+    };
+
+    ws.onmessage = (event) => {
+      // The backend sends raw text tokens, not JSON, unless it's a structural message?
+      // User says: "El orquestador responde con tokens individuales de texto... No envía JSON... sino los fragmentos de texto directamente."
+      // But also: "streaming real... op: 'token' y el contenido...".
+      // Let's re-read carefully: "Streaming Real: El motor de inferencia envía mensajes con op: 'token'... El flujo termina cuando llega un op: 'end'."
+      // BUT "Conexión Frontend-Orquestador... El orquestador responde con tokens individuales de texto... No envía JSON en el stream de respuesta del chat, sino los fragmentos de texto directamente."
+
+      // This is a conflict in the prompt description or a distinction between "Internal Protocol" and "Frontend-Orchestrator Connection".
+      // "Conexión Frontend-Orquestador... El orquestador responde con tokens individuales de texto... No envía JSON" <- This seems to be what the frontend sees.
+      // So I will assume raw text chunks.
+
+      const token = event.data;
+      if (currentMessageDiv) {
+        currentMessageDiv.textContent += token;
+        scrollToBottom();
+      } else {
+        // Start a new message if we receive data but haven't started one?
+        // Or maybe strictly user sends -> create bot message div -> append to it.
+        startBotMessage();
+        currentMessageDiv.textContent += token;
+        scrollToBottom();
+      }
+    };
+
+    ws.onclose = () => {
+      console.log("Disconnected");
+      appendSystemMessage("Disconnected. Reconnecting in 3s...");
+      setTimeout(connect, 3000);
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket Error:", error);
+    };
+  }
+
+  function appendSystemMessage(text) {
+    const div = document.createElement("div");
+    div.className = "message system";
+    div.textContent = text;
+    messagesDiv.appendChild(div);
+    scrollToBottom();
+  }
+
+  function appendUserMessage(text) {
+    const div = document.createElement("div");
+    div.className = "message user";
+    div.textContent = text;
+    messagesDiv.appendChild(div);
+    scrollToBottom();
+  }
+
+  function startBotMessage() {
+    const div = document.createElement("div");
+    div.className = "message bot";
+    messagesDiv.appendChild(div);
+    currentMessageDiv = div;
+    scrollToBottom();
+  }
+
+  function scrollToBottom() {
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+
+  function sendMessage() {
+    const text = input.value.trim();
+    if (text && ws && ws.readyState === WebSocket.OPEN) {
+      appendUserMessage(text);
+      ws.send(text);
+      input.value = "";
+      currentMessageDiv = null; // Reset current bot message so next tokens create a new one?
+      // Actually, if we send a message, we expect a *new* response stream.
+      // If the response is raw text, how do we know when it ends?
+      // The prompt says "El flujo termina cuando llega un op: 'end'" for *internal* protocol.
+      // For Frontend-Orchestrator: "Responde con tokens individuales... No envía JSON".
+      // If it doesn't send "end" or JSON, we might not know when it ends solely by data content if it's just text.
+      // However, usually "response with individual tokens" implies the orchestrator pipes the tokens directly.
+      // We will assume that after we send a message, the next incoming text is the start of the response.
+      // And we keep appending until... effectively forever or until next user message resets state?
+      // Let's assume for now we just append to the *latest* bot message.
+      // If `currentMessageDiv` is null (which we set here), `onmessage` will create a new one. This works.
+    }
+  }
+
+  sendBtn.addEventListener("click", sendMessage);
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
+
+  connect();
+</script>
+
+<style>
+  .chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 800px;
+    margin: 0 auto;
+    font-family: sans-serif;
+    background: #1e1e1e;
+    color: #e0e0e0;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .message {
+    padding: 10px 15px;
+    border-radius: 10px;
+    max-width: 80%;
+    line-height: 1.5;
+  }
+
+  .message.user {
+    align-self: flex-end;
+    background: #007acc;
+    color: white;
+  }
+
+  .message.bot {
+    align-self: flex-start;
+    background: #333;
+    color: #eee;
+  }
+
+  .message.system {
+    align-self: center;
+    background: transparent;
+    color: #888;
+    font-size: 0.8em;
+  }
+
+  .input-area {
+    display: flex;
+    padding: 20px;
+    background: #252526;
+    border-top: 1px solid #333;
+  }
+
+  input {
+    flex: 1;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #444;
+    background: #1e1e1e;
+    color: white;
+    margin-right: 10px;
+  }
+
+  button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    background: #007acc;
+    color: white;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: #0062a3;
+  }
+</style>
