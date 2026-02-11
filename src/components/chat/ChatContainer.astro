@@ -28,10 +28,13 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
 
 <script>
     import { JotaService } from "../../services/jotaService";
+    import { marked } from "marked";
 
     // State
     let service: JotaService;
     let currentMessageDiv: HTMLDivElement | null = null;
+    let isTyping = false;
+    let typingIndicator: HTMLDivElement | null = null;
 
     // Get configuration from DOM data attributes
     const container = document.querySelector(".chat-container") as HTMLElement;
@@ -68,14 +71,32 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
                 appendSystemMessage("Connected to Jota");
             },
             onToken: (token) => {
+                removeTypingIndicator();
                 const targetDiv = currentMessageDiv || startBotMessage();
-                targetDiv.textContent += token;
+
+                // Store raw text in data attribute to accumulate stream
+                const rawText = (targetDiv.dataset.raw || "") + token;
+                targetDiv.dataset.raw = rawText;
+
+                // Parse markdown synchronously
+                const rendered = marked.parse(rawText, { async: false });
+                if (typeof rendered === "string") {
+                    targetDiv.innerHTML = rendered;
+                } else {
+                    // If promise (unlikely with default settings but possible)
+                    (rendered as Promise<string>).then(
+                        (html) => (targetDiv.innerHTML = html),
+                    );
+                }
+
                 scrollToBottom();
             },
             onError: (error) => {
                 console.error("JotaService Error:", error);
+                removeTypingIndicator();
             },
             onClose: () => {
+                removeTypingIndicator();
                 appendSystemMessage(
                     "Connection lost. Attempting to reconnect...",
                 );
@@ -99,6 +120,7 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
         service.sendMessage(text);
         input.value = "";
         currentMessageDiv = null; // Reset for next bot response
+        showTypingIndicator();
     }
 
     function appendUserMessage(text: string) {
@@ -112,6 +134,7 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
     function startBotMessage(): HTMLDivElement {
         const div = document.createElement("div");
         div.className = "message bot";
+        div.dataset.raw = ""; // Initialize raw text buffer
         messagesDiv.appendChild(div);
         currentMessageDiv = div;
         scrollToBottom();
@@ -128,6 +151,24 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
 
     function scrollToBottom() {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function showTypingIndicator() {
+        if (typingIndicator) return;
+        isTyping = true;
+        typingIndicator = document.createElement("div");
+        typingIndicator.className = "message bot typing-indicator";
+        typingIndicator.textContent = "Typing...";
+        messagesDiv.appendChild(typingIndicator);
+        scrollToBottom();
+    }
+
+    function removeTypingIndicator() {
+        if (typingIndicator) {
+            typingIndicator.remove();
+            typingIndicator = null;
+        }
+        isTyping = false;
     }
 
     // Start
