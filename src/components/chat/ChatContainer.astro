@@ -76,8 +76,9 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
                 console.error("JotaService Error:", error);
             },
             onClose: () => {
-                appendSystemMessage("Disconnected. Reconnecting in 3s...");
-                setTimeout(() => service.connect(), 3000);
+                appendSystemMessage(
+                    "Connection lost. Attempting to reconnect...",
+                );
             },
         });
 
