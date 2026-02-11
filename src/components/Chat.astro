@@ -13,11 +13,13 @@
 <script>
   const userId = "user_" + Math.floor(Math.random() * 1000);
   const wsUrl = `ws://green-house.local/api/jota/ws/chat/${userId}`;
-  let ws;
-  const messagesDiv = document.getElementById("chat-messages");
-  const input = document.getElementById("chat-input");
-  const sendBtn = document.getElementById("send-btn");
-  let currentMessageDiv = null;
+  let ws: WebSocket;
+  const messagesDiv = document.getElementById(
+    "chat-messages",
+  ) as HTMLDivElement;
+  const input = document.getElementById("chat-input") as HTMLInputElement;
+  const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
+  let currentMessageDiv: HTMLDivElement | null = null;
 
   function connect() {
     ws = new WebSocket(wsUrl);
@@ -39,16 +41,9 @@
       // So I will assume raw text chunks.
 
       const token = event.data;
-      if (currentMessageDiv) {
-        currentMessageDiv.textContent += token;
-        scrollToBottom();
-      } else {
-        // Start a new message if we receive data but haven't started one?
-        // Or maybe strictly user sends -> create bot message div -> append to it.
-        startBotMessage();
-        currentMessageDiv.textContent += token;
-        scrollToBottom();
-      }
+      const targetDiv = currentMessageDiv || startBotMessage();
+      targetDiv.textContent += token;
+      scrollToBottom();
     };
 
     ws.onclose = () => {
@@ -78,12 +73,13 @@
     scrollToBottom();
   }
 
-  function startBotMessage() {
+  function startBotMessage(): HTMLDivElement {
     const div = document.createElement("div");
     div.className = "message bot";
     messagesDiv.appendChild(div);
     currentMessageDiv = div;
     scrollToBottom();
+    return div;
   }
 
   function scrollToBottom() {

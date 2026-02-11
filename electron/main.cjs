@@ -1,5 +1,6 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, session } = require('electron');
 const path = require('path');
+require('dotenv').config();
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -21,6 +22,15 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    // Intercept requests to inject the API key
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+        { urls: ['*://green-house.local/*'] },
+        (details, callback) => {
+            details.requestHeaders['x-api-key'] = process.env.JOTA_API_KEY;
+            callback({ requestHeaders: details.requestHeaders });
+        }
+    );
+
     createWindow();
 
     app.on('activate', () => {
