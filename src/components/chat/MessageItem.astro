@@ -1,0 +1,19 @@
+---
+import "../../styles/chat.css";
+
+interface Props {
+    text: string;
+    sender: "user" | "bot" | "system";
+    metadata: any; // TODO: Define metadata type
+}
+
+const { text, sender, metadata } = Astro.props;
+---
+
+<div class={`message ${sender}`}>
+    {text}
+    <div class="metadata">
+        {JSON.stringify(metadata)}
+        // TODO: Show specific metadata like time, or tokens used
+    </div>
+</div>

@@ -1,0 +1,113 @@
+---
+import "../../styles/chat.css";
+import MessageItem from "./MessageItem.astro";
+---
+
+<div class="chat-container">
+    <div id="chat-messages" class="messages">
+        <!-- Initial/History messages could be rendered here using MessageItem if passed via props -->
+    </div>
+    <div class="input-area">
+        <input
+            type="text"
+            id="chat-input"
+            placeholder="Type a message..."
+            autocomplete="off"
+        />
+        <button id="send-btn">Send</button>
+    </div>
+</div>
+
+<script>
+    import { JotaService } from "../../services/jotaService";
+
+    // State
+    let service: JotaService;
+    let currentMessageDiv: HTMLDivElement | null = null;
+    let userId = localStorage.getItem("jota_user_id");
+
+    // DOM Elements
+    const messagesDiv = document.getElementById(
+        "chat-messages",
+    ) as HTMLDivElement;
+    const input = document.getElementById("chat-input") as HTMLInputElement;
+    const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
+
+    // Initialize or retrieve User ID
+    if (!userId) {
+        userId = "user_" + Math.floor(Math.random() * 1000);
+        localStorage.setItem("jota_user_id", userId);
+    }
+
+    function init() {
+        service = new JotaService(userId!);
+
+        service.setCallbacks({
+            onOpen: () => {
+                appendSystemMessage("Connected to Jota");
+            },
+            onToken: (token) => {
+                const targetDiv = currentMessageDiv || startBotMessage();
+                targetDiv.textContent += token;
+                scrollToBottom();
+            },
+            onError: (error) => {
+                console.error("JotaService Error:", error);
+            },
+            onClose: () => {
+                appendSystemMessage("Disconnected. Reconnecting in 3s...");
+                setTimeout(() => service.connect(), 3000);
+            },
+        });
+
+        service.connect();
+
+        // Event Listeners
+        sendBtn.addEventListener("click", sendMessage);
+        input.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendMessage();
+        });
+    }
+
+    function sendMessage() {
+        const text = input.value.trim();
+        if (!text) return;
+
+        appendUserMessage(text);
+        service.sendMessage(text);
+        input.value = "";
+        currentMessageDiv = null; // Reset for next bot response
+    }
+
+    function appendUserMessage(text: string) {
+        const div = document.createElement("div");
+        div.className = "message user";
+        div.textContent = text;
+        messagesDiv.appendChild(div);
+        scrollToBottom();
+    }
+
+    function startBotMessage(): HTMLDivElement {
+        const div = document.createElement("div");
+        div.className = "message bot";
+        messagesDiv.appendChild(div);
+        currentMessageDiv = div;
+        scrollToBottom();
+        return div;
+    }
+
+    function appendSystemMessage(text: string) {
+        const div = document.createElement("div");
+        div.className = "message system";
+        div.textContent = text;
+        messagesDiv.appendChild(div);
+        scrollToBottom();
+    }
+
+    function scrollToBottom() {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // Start
+    init();
+</script>

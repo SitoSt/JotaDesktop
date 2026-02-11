@@ -1,5 +1,5 @@
 ---
-import Chat from '../components/Chat.astro';
+import ChatContainer from "../components/chat/ChatContainer.astro";
 ---
 
 <html lang="en">
@@ -11,12 +11,13 @@ import Chat from '../components/Chat.astro';
 		<title>Jota Desktop</title>
 	</head>
 	<body>
-		<Chat />
+		<ChatContainer />
 	</body>
 </html>
 
 <style>
-	html, body {
+	html,
+	body {
 		margin: 0;
 		padding: 0;
 		width: 100%;
