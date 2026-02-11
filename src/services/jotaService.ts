@@ -13,22 +13,22 @@ type OpenCallback = () => void;
 export class JotaService {
     private ws: WebSocket | null = null;
     private userId: string;
-    private clientKey: string;
+    private baseUrl: string;
     private onToken: TokenCallback | null = null;
     private onError: ErrorCallback | null = null;
     private onClose: CloseCallback | null = null;
     private onOpen: OpenCallback | null = null;
 
-    constructor(userId: string, clientKey: string) {
+    constructor(userId: string, baseUrl: string = "ws://green-house.local/api/jota") {
         this.userId = userId;
-        this.clientKey = clientKey;
+        this.baseUrl = baseUrl;
     }
 
     public connect() {
-        // Hardcoded URL base as per prompt context, but utilizing the variables.
-        // Prompt: ws://green-house.local/api/jota/ws/chat/${userId}?client_key=${clientKey}
-        const wsUrl = `ws://green-house.local/api/jota/ws/chat/${this.userId}?client_key=${this.clientKey}`;
+        // Ensure we close any existing connection before creating a new one
+        this.disconnect();
 
+        const wsUrl = `${this.baseUrl}/ws/chat/${this.userId}`;
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {

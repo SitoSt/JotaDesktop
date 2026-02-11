@@ -1,9 +1,17 @@
 ---
 import "../../styles/chat.css";
 import MessageItem from "./MessageItem.astro";
+
+const apiUrl =
+    import.meta.env.JOTA_API_URL || "http://green-house.local/api/jota";
+const initialUserId = import.meta.env.JOTA_USER_ID || "";
 ---
 
-<div class="chat-container">
+<div
+    class="chat-container"
+    data-api-url={apiUrl}
+    data-initial-user-id={initialUserId}
+>
     <div id="chat-messages" class="messages">
         <!-- Initial/History messages could be rendered here using MessageItem if passed via props -->
     </div>
@@ -24,7 +32,15 @@ import MessageItem from "./MessageItem.astro";
     // State
     let service: JotaService;
     let currentMessageDiv: HTMLDivElement | null = null;
-    let userId = localStorage.getItem("jota_user_id");
+
+    // Get configuration from DOM data attributes
+    const container = document.querySelector(".chat-container") as HTMLElement;
+    const apiUrl =
+        container.dataset.apiUrl || "http://green-house.local/api/jota";
+    const initialUserId = container.dataset.initialUserId || "";
+
+    // Resolve User ID: Env Var -> LocalStorage -> Random
+    let userId = initialUserId || localStorage.getItem("jota_user_id");
 
     // DOM Elements
     const messagesDiv = document.getElementById(
@@ -40,7 +56,12 @@ import MessageItem from "./MessageItem.astro";
     }
 
     function init() {
-        service = new JotaService(userId!);
+        // Convert HTTP URL to WS URL if needed, or JotaService handles it?
+        // JotaService expects "ws://...".
+        // If JOTA_API_URL is "http://...", we need to replace protocol.
+        const wsUrl = apiUrl.replace(/^http/, "ws");
+
+        service = new JotaService(userId!, wsUrl);
 
         service.setCallbacks({
             onOpen: () => {
