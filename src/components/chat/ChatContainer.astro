@@ -1,33 +1,38 @@
 ---
 import "../../styles/chat.css";
 import MessageItem from "./MessageItem.astro";
+import ConversationSidebar from "./ConversationSidebar.astro";
 
 const apiUrl =
     import.meta.env.JOTA_API_URL || "http://green-house.local/api/jota";
 const initialUserId = import.meta.env.JOTA_USER_ID || "";
 ---
 
-<div
-    class="chat-container"
-    data-api-url={apiUrl}
-    data-initial-user-id={initialUserId}
->
-    <div id="chat-messages" class="messages">
-        <!-- Initial/History messages could be rendered here using MessageItem if passed via props -->
-    </div>
-    <div class="input-area">
-        <input
-            type="text"
-            id="chat-input"
-            placeholder="Type a message..."
-            autocomplete="off"
-        />
-        <button id="send-btn">Send</button>
+<div class="app-layout">
+    <ConversationSidebar />
+    <div
+        class="chat-container"
+        data-api-url={apiUrl}
+        data-initial-user-id={initialUserId}
+    >
+        <div id="chat-messages" class="messages">
+            <!-- Initial/History messages could be rendered here using MessageItem if passed via props -->
+        </div>
+        <div class="input-area">
+            <input
+                type="text"
+                id="chat-input"
+                placeholder="Type a message..."
+                autocomplete="off"
+            />
+            <button id="send-btn">Send</button>
+        </div>
     </div>
 </div>
 
 <script>
     import { JotaService } from "../../services/jotaService";
+    import { apiService } from "../../services/jotaApiService";
     import { marked } from "marked";
 
     // State
@@ -35,6 +40,8 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
     let currentMessageDiv: HTMLDivElement | null = null;
     let isTyping = false;
     let typingIndicator: HTMLDivElement | null = null;
+    let currentConversationId: string | null = null;
+    let isFirstMessageInNewConversation = true;
 
     // Get configuration from DOM data attributes
     const container = document.querySelector(".chat-container") as HTMLElement;
@@ -58,11 +65,20 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
         localStorage.setItem("jota_user_id", userId);
     }
 
-    function init() {
-        // Convert HTTP URL to WS URL if needed, or JotaService handles it?
-        // JotaService expects "ws://...".
-        // If JOTA_API_URL is "http://...", we need to replace protocol.
-        const wsUrl = apiUrl.replace(/^http/, "ws");
+    async function init() {
+        console.log("ChatContainer initializing...");
+        // Convert HTTP URL to WS URL.
+        // Use origin to avoid appending /ws/chat to existing path /api/jota if the WS is at root.
+        let wsUrl;
+        try {
+            const urlObj = new URL(apiUrl);
+            wsUrl = urlObj.origin.replace(/^http/, "ws");
+        } catch (e) {
+            // Fallback if apiUrl is relative or invalid
+            wsUrl = apiUrl.replace(/^http/, "ws");
+        }
+
+        console.log("Resolved WS URL (Origin):", wsUrl);
 
         service = new JotaService(userId!, wsUrl);
 
@@ -103,13 +119,74 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
             },
         });
 
-        service.connect();
-
         // Event Listeners
         sendBtn.addEventListener("click", sendMessage);
         input.addEventListener("keypress", (e) => {
             if (e.key === "Enter") sendMessage();
         });
+
+        document.addEventListener("jota:loadConversation", async (e: any) => {
+            const requestedId = e.detail.conversationId;
+            await switchConversation(requestedId);
+        });
+
+        // Start without connection, user must click 'New Chat' or select one if they don't want the default
+        // Or we auto-connect to a new one
+        await switchConversation(null);
+    }
+
+    async function switchConversation(id: string | null) {
+        if (service) {
+            service.disconnect(true); // Don't auto-reconnect
+        }
+
+        messagesDiv.innerHTML = ""; // Clear UI
+        currentMessageDiv = null;
+        removeTypingIndicator();
+
+        currentConversationId = id;
+        service.setConversationId(id);
+        isFirstMessageInNewConversation = id === null;
+
+        // Notify sidebar
+        document.dispatchEvent(
+            new CustomEvent("jota:conversationChanged", {
+                detail: { conversationId: id },
+            }),
+        );
+
+        if (id && userId) {
+            appendSystemMessage("Loading history...");
+            try {
+                const msgs = await apiService.getMessages(userId, id, 100);
+                messagesDiv.innerHTML = ""; // Clear loading msg
+
+                msgs.forEach((msg) => {
+                    if (msg.role === "user") {
+                        appendUserMessage(msg.content);
+                    } else if (msg.role === "assistant") {
+                        const div = document.createElement("div");
+                        div.className = "message bot";
+                        const rendered = marked.parse(msg.content, {
+                            async: false,
+                        });
+                        div.innerHTML =
+                            typeof rendered === "string" ? rendered : "";
+                        messagesDiv.appendChild(div);
+                    }
+                });
+                scrollToBottom();
+            } catch (error) {
+                appendSystemMessage("Error loading history.");
+                console.error(error);
+            }
+        } else {
+            // New conversation
+            appendSystemMessage("Started new conversation.");
+        }
+
+        // Connect WS using the target ID
+        service.connect();
     }
 
     function sendMessage() {
@@ -121,6 +198,17 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
         input.value = "";
         currentMessageDiv = null; // Reset for next bot response
         showTypingIndicator();
+
+        // Refresh sidebar after first message in a new conversation to show it in the list
+        if (isFirstMessageInNewConversation) {
+            isFirstMessageInNewConversation = false;
+            // Delay slightly to give backend time to generate the title and save
+            setTimeout(() => {
+                document.dispatchEvent(
+                    new CustomEvent("jota:refreshConversations"),
+                );
+            }, 1500);
+        }
     }
 
     function appendUserMessage(text: string) {

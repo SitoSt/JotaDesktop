@@ -14,6 +14,7 @@ export class JotaService {
     private ws: WebSocket | null = null;
     private userId: string;
     private baseUrl: string;
+    public conversationId: string | null = null;
     private onToken: TokenCallback | null = null;
     private onError: ErrorCallback | null = null;
     private onClose: CloseCallback | null = null;
@@ -29,19 +30,41 @@ export class JotaService {
 
     constructor(userId: string, baseUrl: string = "ws://green-house.local/api/jota") {
         this.userId = userId;
-        this.baseUrl = baseUrl;
+        this.baseUrl = "ws://green-house.local/api/jota";
     }
 
     public connect() {
         this.disconnect(false); // Clean up but don't flag as intentional disconnect yet (resetting purpose)
         this.isIntentionalClose = false;
 
-        const wsUrl = `${this.baseUrl}/ws/chat/${this.userId}`;
-        this.ws = new WebSocket(wsUrl);
-        this.ws.binaryType = "arraybuffer"; // Receive binary to handle UTF-8 stream manually
+        let wsUrl = `${this.baseUrl}/ws/chat/${this.userId}`;
+
+        // Use client context/key from env if configured, default fallback
+        // The main.cjs intercepts API key, but for WS in browser we need client_key param
+        // JotaDesktop already injects API KEY but we'll append query param if missing in frontend too
+        const apiKey = "jota_desktop_vPucN40NDDBkQkTt"; // In a real app this is injected or fetched
+        const params = new URLSearchParams();
+        params.append("client_key", apiKey);
+
+        if (this.conversationId) {
+            params.append("conversation_id", this.conversationId);
+        }
+
+        wsUrl += `?${params.toString()}`;
+
+        console.log(`[JotaService] Connecting to: ${wsUrl}`);
+
+        try {
+            this.ws = new WebSocket(wsUrl);
+            this.ws.binaryType = "arraybuffer"; // Receive binary to handle UTF-8 stream manually
+        } catch (e) {
+            console.error("[JotaService] Failed to create WebSocket:", e);
+            this.handleReconnection();
+            return;
+        }
 
         this.ws.onopen = () => {
-            console.log('Connected to Jota Orchestrator');
+            console.log('[JotaService] Connected to Jota Orchestrator');
             this.reconnectAttempts = 0; // Reset attempts on success
             if (this.onOpen) this.onOpen();
         };
@@ -127,6 +150,10 @@ export class JotaService {
         } else {
             console.warn('WebSocket is not open. Cannot send message.');
         }
+    }
+
+    public setConversationId(id: string | null) {
+        this.conversationId = id;
     }
 
     public setCallbacks(callbacks: {

@@ -14,6 +14,11 @@ function createWindow() {
         },
     });
 
+    // Pipe renderer console logs to terminal
+    win.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        console.log(`[Renderer] ${message}`);
+    });
+
     if (isDev) {
         win.loadURL('http://localhost:4321');
     } else {
@@ -24,9 +29,9 @@ function createWindow() {
 app.whenReady().then(() => {
     // Intercept requests to inject the API key
     session.defaultSession.webRequest.onBeforeSendHeaders(
-        { urls: ['*://green-house.local/*'] },
+        { urls: ['http://green-house.local/*', 'ws://green-house.local/*', 'wss://green-house.local/*'] },
         (details, callback) => {
-            details.requestHeaders['x-api-key'] = process.env.JOTA_API_KEY;
+            details.requestHeaders['X-API-Key'] = process.env.JOTA_API_KEY;
             callback({ requestHeaders: details.requestHeaders });
         }
     );
