@@ -43,10 +43,13 @@ export class JotaApiService {
         try {
             const baseUrl = this.getBaseUrl();
             const url = new URL(`${baseUrl}/chat/conversations/${userId}`);
-            url.searchParams.append("client_key", this.clientKey);
             url.searchParams.append("limit", limit.toString());
 
-            const response = await fetch(url.toString());
+            const response = await fetch(url.toString(), {
+                headers: {
+                    "x-client-key": this.clientKey
+                }
+            });
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -68,10 +71,13 @@ export class JotaApiService {
         try {
             const baseUrl = this.getBaseUrl();
             const url = new URL(`${baseUrl}/chat/conversations/${userId}/${conversationId}/messages`);
-            url.searchParams.append("client_key", this.clientKey);
             url.searchParams.append("limit", limit.toString());
 
-            const response = await fetch(url.toString());
+            const response = await fetch(url.toString(), {
+                headers: {
+                    "x-client-key": this.clientKey
+                }
+            });
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }

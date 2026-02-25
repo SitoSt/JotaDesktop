@@ -37,14 +37,13 @@ export class JotaService {
         this.disconnect(false); // Clean up but don't flag as intentional disconnect yet (resetting purpose)
         this.isIntentionalClose = false;
 
-        let wsUrl = `${this.baseUrl}/ws/chat/${this.userId}`;
+        let wsUrl = `${this.baseUrl}/ws/${this.userId}`;
 
         // Use client context/key from env if configured, default fallback
         // The main.cjs intercepts API key, but for WS in browser we need client_key param
         // JotaDesktop already injects API KEY but we'll append query param if missing in frontend too
         const apiKey = "jota_desktop_vPucN40NDDBkQkTt"; // In a real app this is injected or fetched
         const params = new URLSearchParams();
-        params.append("client_key", apiKey);
 
         if (this.conversationId) {
             params.append("conversation_id", this.conversationId);

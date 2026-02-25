@@ -61,7 +61,8 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
 
     // Initialize or retrieve User ID
     if (!userId) {
-        userId = "user_" + Math.floor(Math.random() * 1000);
+        // userId = "user_" + Math.floor(Math.random() * 1000);
+        userId = "Sito";
         localStorage.setItem("jota_user_id", userId);
     }
 

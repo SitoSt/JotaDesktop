@@ -31,7 +31,7 @@ app.whenReady().then(() => {
     session.defaultSession.webRequest.onBeforeSendHeaders(
         { urls: ['http://green-house.local/*', 'ws://green-house.local/*', 'wss://green-house.local/*'] },
         (details, callback) => {
-            details.requestHeaders['X-API-Key'] = process.env.JOTA_API_KEY;
+            details.requestHeaders['x-client-key'] = process.env.JOTA_API_KEY;
             callback({ requestHeaders: details.requestHeaders });
         }
     );
