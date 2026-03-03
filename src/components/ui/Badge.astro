@@ -1,0 +1,20 @@
+---
+interface Props {
+    modelId: string;
+}
+
+const { modelId } = Astro.props;
+---
+
+<span class="model-badge">Generado por: {modelId}</span>
+
+<style>
+    .model-badge {
+        display: block;
+        margin-top: 6px;
+        font-size: 0.7em;
+        color: #555;
+        font-style: italic;
+        letter-spacing: 0.02em;
+    }
+</style>

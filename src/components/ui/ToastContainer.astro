@@ -1,0 +1,66 @@
+---
+// Mount point for dynamically injected toast notifications.
+// Logic is handled externally via JS that appends .toast children here.
+---
+
+<div id="toast-container" class="toast-container"></div>
+
+<style>
+    .toast-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+    }
+
+    /* Individual toasts are injected by JS; global styles live here */
+    :global(.toast) {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 0.85em;
+        max-width: 320px;
+        line-height: 1.4;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        transform: translateY(10px);
+        transition:
+            opacity 0.35s ease,
+            transform 0.35s ease;
+        pointer-events: auto;
+    }
+
+    :global(.toast.toast--visible) {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    :global(.toast--error) {
+        background: #3a1f1f;
+        border: 1px solid #7a2f2f;
+        color: #f08080;
+    }
+
+    :global(.toast--warning) {
+        background: #3a2e1a;
+        border: 1px solid #7a5a20;
+        color: #e0b060;
+    }
+
+    :global(.toast--info) {
+        background: #1a2a3a;
+        border: 1px solid #1a4a7a;
+        color: #60a0e0;
+    }
+
+    :global(.toast svg) {
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+</style>

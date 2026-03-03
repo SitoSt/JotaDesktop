@@ -1,19 +1,86 @@
 ---
-import "../../styles/chat.css";
+// MessageItem: renders a single chat message bubble.
+// Used both for statically loaded history and as a template reference.
+// When rendered via JS, elements are created imperatively and follow the same class structure.
 
 interface Props {
-    text: string;
-    sender: "user" | "bot" | "system";
-    metadata: any; // TODO: Define metadata type
+    role: "user" | "assistant" | "system";
+    content?: string;
+    modelId?: string;
 }
 
-const { text, sender, metadata } = Astro.props;
+const { role, content = "", modelId } = Astro.props;
+
+const roleClass = role === "assistant" ? "bot" : role;
 ---
 
-<div class={`message ${sender}`}>
-    {text}
-    <div class="metadata">
-        {JSON.stringify(metadata)}
-        // TODO: Show specific metadata like time, or tokens used
-    </div>
+<div class:list={["message", roleClass]}>
+    <span class="message__content" set:html={content} />
+    {
+        role === "assistant" && modelId && (
+            <span class="model-badge">Generado por: {modelId}</span>
+        )
+    }
 </div>
+
+<style>
+    .message {
+        padding: 10px 15px;
+        border-radius: 10px;
+        max-width: 80%;
+        line-height: 1.5;
+    }
+
+    .message.user {
+        align-self: flex-end;
+        background: #007acc;
+        color: #fff;
+    }
+
+    .message.bot {
+        align-self: flex-start;
+        background: #333;
+        color: #eee;
+    }
+
+    .message.system {
+        align-self: center;
+        background: transparent;
+        color: #888;
+        font-size: 0.8em;
+        text-align: center;
+    }
+
+    .message__content {
+        display: block;
+    }
+
+    /* Prose overrides for markdown inside bot messages */
+    .message.bot :global(p) {
+        margin: 0.4em 0;
+    }
+
+    .message.bot :global(pre) {
+        background: #1e1e1e;
+        border-radius: 6px;
+        padding: 10px;
+        overflow-x: auto;
+        font-size: 0.85em;
+    }
+
+    .message.bot :global(code) {
+        background: #1e1e1e;
+        border-radius: 3px;
+        padding: 1px 4px;
+        font-size: 0.88em;
+    }
+
+    .model-badge {
+        display: block;
+        margin-top: 6px;
+        font-size: 0.7em;
+        color: #555;
+        font-style: italic;
+        letter-spacing: 0.02em;
+    }
+</style>

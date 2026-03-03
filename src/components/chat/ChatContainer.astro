@@ -1,155 +1,175 @@
 ---
 import "../../styles/chat.css";
-import MessageItem from "./MessageItem.astro";
 import ConversationSidebar from "./ConversationSidebar.astro";
+import ChatHeader from "./ChatHeader.astro";
+import MessageList from "./MessageList.astro";
+import InputArea from "./InputArea.astro";
+import ToastContainer from "../ui/ToastContainer.astro";
 
-const apiUrl =
-    import.meta.env.JOTA_API_URL || "http://green-house.local/api/jota";
+const apiUrl = import.meta.env.JOTA_API_URL || "";
+const clientKey = import.meta.env.JOTA_CLIENT_KEY || "";
 const initialUserId = import.meta.env.JOTA_USER_ID || "";
 ---
 
 <div class="app-layout">
     <ConversationSidebar />
+
     <div
         class="chat-container"
         data-api-url={apiUrl}
+        data-client-key={clientKey}
         data-initial-user-id={initialUserId}
     >
-        <div id="chat-messages" class="messages">
-            <!-- Initial/History messages could be rendered here using MessageItem if passed via props -->
-        </div>
-        <div class="input-area">
-            <input
-                type="text"
-                id="chat-input"
-                placeholder="Type a message..."
-                autocomplete="off"
-            />
-            <button id="send-btn">Send</button>
-        </div>
+        <ChatHeader />
+        <MessageList />
+        <InputArea />
     </div>
 </div>
 
+<ToastContainer />
+
 <script>
-    import { JotaService } from "../../services/jotaService";
-    import { apiService } from "../../services/jotaApiService";
+    import { JotaWebSocket } from "../../services/ws";
+    import {
+        JotaApiService,
+        type ModelInfo,
+        type ChatMessage,
+    } from "../../services/api";
     import { marked } from "marked";
 
-    // State
-    let service: JotaService;
-    let currentMessageDiv: HTMLDivElement | null = null;
-    let isTyping = false;
-    let typingIndicator: HTMLDivElement | null = null;
-    let currentConversationId: string | null = null;
-    let isFirstMessageInNewConversation = true;
-
-    // Get configuration from DOM data attributes
+    // ─── Bootstrap ─────────────────────────────────────────────────────────────
     const container = document.querySelector(".chat-container") as HTMLElement;
-    const apiUrl =
-        container.dataset.apiUrl || "http://green-house.local/api/jota";
-    const initialUserId = container.dataset.initialUserId || "";
+    const apiUrl = container.dataset.apiUrl ?? "";
+    const clientKey = container.dataset.clientKey ?? "";
+    const initialUserId = container.dataset.initialUserId ?? "";
 
-    // Resolve User ID: Env Var -> LocalStorage -> Random
-    let userId = initialUserId || localStorage.getItem("jota_user_id");
+    let userId =
+        localStorage.getItem("jota_user_id") || initialUserId || "user";
+    // Sanitize: strip any accidental "chat/" prefix that may have been
+    // persisted in localStorage from a previous bug in the path construction.
+    userId = userId.replace(/^(chat\/)+/, "");
+    localStorage.setItem("jota_user_id", userId);
 
-    // DOM Elements
+    const api = new JotaApiService(apiUrl, clientKey);
+    const service = new JotaWebSocket(userId, apiUrl);
+    service.setClientKey(clientKey);
+
+    // ─── State ──────────────────────────────────────────────────────────────────
+    let currentConversationId: string | null = null;
+    let currentMessageDiv: HTMLDivElement | null = null;
+    let isFirstMessage = true;
+    let pendingMessage: string | null = null;
+    let typingIndicator: HTMLDivElement | null = null;
+    let selectedModelId: string | null = null;
+    let previousModelId: string | null = null;
+
+    // ─── DOM refs ────────────────────────────────────────────────────────────────
     const messagesDiv = document.getElementById(
         "chat-messages",
     ) as HTMLDivElement;
-    const input = document.getElementById("chat-input") as HTMLInputElement;
+    const inputEl = document.getElementById("chat-input") as HTMLInputElement;
     const sendBtn = document.getElementById("send-btn") as HTMLButtonElement;
+    const modelSelect = document.getElementById(
+        "model-selector",
+    ) as HTMLSelectElement;
+    const statusEl = document.getElementById(
+        "connection-status",
+    ) as HTMLDivElement;
+    const statusDot = statusEl?.querySelector(".connection-status__dot");
+    const statusLabel = statusEl?.querySelector<HTMLSpanElement>(
+        ".connection-status__label",
+    );
 
-    // Initialize or retrieve User ID
-    if (!userId) {
-        // userId = "user_" + Math.floor(Math.random() * 1000);
-        userId = "Sito";
-        localStorage.setItem("jota_user_id", userId);
+    // ─── Connection Status ───────────────────────────────────────────────────────
+    function setStatus(
+        state: "connected" | "disconnected" | "reconnecting" | "error",
+        label = "",
+    ) {
+        if (!statusEl) return;
+        statusEl.dataset.status = state;
+        if (statusLabel) statusLabel.textContent = label;
     }
 
-    async function init() {
-        console.log("ChatContainer initializing...");
-        // Convert HTTP URL to WS URL.
-        // Use origin to avoid appending /ws/chat to existing path /api/jota if the WS is at root.
-        let wsUrl;
-        try {
-            const urlObj = new URL(apiUrl);
-            wsUrl = urlObj.origin.replace(/^http/, "ws");
-        } catch (e) {
-            // Fallback if apiUrl is relative or invalid
-            wsUrl = apiUrl.replace(/^http/, "ws");
+    // ─── Models ──────────────────────────────────────────────────────────────────
+    async function loadModels() {
+        const models = await api.models.getModels();
+
+        modelSelect.innerHTML = "";
+
+        if (models.length === 0) {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "Sin modelos disponibles";
+            modelSelect.appendChild(opt);
+            modelSelect.disabled = true;
+            return;
         }
 
-        console.log("Resolved WS URL (Origin):", wsUrl);
+        models.forEach((m: ModelInfo, i: number) => {
+            const opt = document.createElement("option");
+            opt.value = m.id;
+            opt.textContent = m.name + (m.size ? ` (${m.size})` : "");
+            if (m.format) opt.title = `Formato: ${m.format}`;
+            modelSelect.appendChild(opt);
+            if (i === 0) {
+                selectedModelId = m.id;
+                previousModelId = m.id;
+                service.setModelId(m.id);
+            }
+        });
 
-        service = new JotaService(userId!, wsUrl);
+        modelSelect.disabled = false;
+    }
 
-        service.setCallbacks({
-            onOpen: () => {
-                appendSystemMessage("Connected to Jota");
-            },
-            onToken: (token) => {
-                removeTypingIndicator();
-                const targetDiv = currentMessageDiv || startBotMessage();
+    modelSelect?.addEventListener("change", async () => {
+        const newId = modelSelect.value;
+        if (!newId || newId === selectedModelId) return;
 
-                // Store raw text in data attribute to accumulate stream
-                const rawText = (targetDiv.dataset.raw || "") + token;
-                targetDiv.dataset.raw = rawText;
+        previousModelId = selectedModelId;
+        selectedModelId = newId;
+        service.setModelId(newId);
 
-                // Parse markdown synchronously
-                const rendered = marked.parse(rawText, { async: false });
-                if (typeof rendered === "string") {
-                    targetDiv.innerHTML = rendered;
-                } else {
-                    // If promise (unlikely with default settings but possible)
-                    (rendered as Promise<string>).then(
-                        (html) => (targetDiv.innerHTML = html),
-                    );
-                }
-
-                scrollToBottom();
-            },
-            onError: (error) => {
-                console.error("JotaService Error:", error);
-                removeTypingIndicator();
-            },
-            onClose: () => {
-                removeTypingIndicator();
-                appendSystemMessage(
-                    "Connection lost. Attempting to reconnect...",
+        if (currentConversationId) {
+            const ok = await api.conversations.updateModel(
+                currentConversationId,
+                newId,
+            );
+            if (!ok)
+                showToast(
+                    "No se pudo actualizar el modelo en el servidor.",
+                    "warning",
                 );
-            },
-        });
-
-        // Event Listeners
-        sendBtn.addEventListener("click", sendMessage);
-        input.addEventListener("keypress", (e) => {
-            if (e.key === "Enter") sendMessage();
-        });
-
-        document.addEventListener("jota:loadConversation", async (e: any) => {
-            const requestedId = e.detail.conversationId;
-            await switchConversation(requestedId);
-        });
-
-        // Start without connection, user must click 'New Chat' or select one if they don't want the default
-        // Or we auto-connect to a new one
-        await switchConversation(null);
-    }
-
-    async function switchConversation(id: string | null) {
-        if (service) {
-            service.disconnect(true); // Don't auto-reconnect
         }
 
-        messagesDiv.innerHTML = ""; // Clear UI
+        // Reconnect WS so next message uses the new model
+        if (currentConversationId && service.isConnected) {
+            service.disconnect(true);
+            setTimeout(() => service.connect(), 200);
+        }
+    });
+
+    function revertModel() {
+        if (previousModelId !== null) {
+            selectedModelId = previousModelId;
+            service.setModelId(selectedModelId);
+            if (modelSelect) modelSelect.value = selectedModelId ?? "";
+        }
+    }
+
+    // ─── Conversation Switching ──────────────────────────────────────────────────
+    async function switchConversation(id: string | null) {
+        service.disconnect(true);
+        messagesDiv.innerHTML = "";
         currentMessageDiv = null;
+        inputEl.value = "";
         removeTypingIndicator();
 
         currentConversationId = id;
         service.setConversationId(id);
-        isFirstMessageInNewConversation = id === null;
+        isFirstMessage = id === null;
 
-        // Notify sidebar
+        setStatus("disconnected");
+
         document.dispatchEvent(
             new CustomEvent("jota:conversationChanged", {
                 detail: { conversationId: id },
@@ -157,61 +177,138 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
         );
 
         if (id && userId) {
-            appendSystemMessage("Loading history...");
-            try {
-                const msgs = await apiService.getMessages(userId, id, 100);
-                messagesDiv.innerHTML = ""; // Clear loading msg
+            appendSystemMessage("Cargando historial...");
+            const messages = await api.conversations.getMessages(
+                userId,
+                id,
+                100,
+            );
 
-                msgs.forEach((msg) => {
-                    if (msg.role === "user") {
-                        appendUserMessage(msg.content);
-                    } else if (msg.role === "assistant") {
-                        const div = document.createElement("div");
-                        div.className = "message bot";
-                        const rendered = marked.parse(msg.content, {
-                            async: false,
-                        });
-                        div.innerHTML =
-                            typeof rendered === "string" ? rendered : "";
-                        messagesDiv.appendChild(div);
-                    }
-                });
-                scrollToBottom();
-            } catch (error) {
-                appendSystemMessage("Error loading history.");
-                console.error(error);
+            messagesDiv.innerHTML = "";
+
+            for (const msg of messages) {
+                if (msg.role === "user") {
+                    appendUserMessage(msg.content);
+                } else if (msg.role === "assistant") {
+                    const div = createBotMessageDiv();
+                    const rendered = marked.parse(msg.content, {
+                        async: false,
+                    });
+                    div.innerHTML =
+                        typeof rendered === "string" ? rendered : msg.content;
+                    const modelId = msg.metadata?.model_id;
+                    if (modelId) attachModelBadge(div, String(modelId));
+                    messagesDiv.appendChild(div);
+                }
             }
-        } else {
-            // New conversation
-            appendSystemMessage("Started new conversation.");
-        }
 
-        // Connect WS using the target ID
-        service.connect();
+            scrollToBottom();
+            service.connect();
+        }
+        // If id === null: stay disconnected, wait for first send
     }
 
+    // ─── Sending Messages ────────────────────────────────────────────────────────
     function sendMessage() {
-        const text = input.value.trim();
+        const text = inputEl.value.trim();
         if (!text) return;
 
         appendUserMessage(text);
-        service.sendMessage(text);
-        input.value = "";
-        currentMessageDiv = null; // Reset for next bot response
+        inputEl.value = "";
+        currentMessageDiv = null;
         showTypingIndicator();
 
-        // Refresh sidebar after first message in a new conversation to show it in the list
-        if (isFirstMessageInNewConversation) {
-            isFirstMessageInNewConversation = false;
-            // Delay slightly to give backend time to generate the title and save
-            setTimeout(() => {
-                document.dispatchEvent(
-                    new CustomEvent("jota:refreshConversations"),
-                );
-            }, 1500);
+        if (isFirstMessage) {
+            isFirstMessage = false;
+            pendingMessage = text;
+            service.connect();
+            setTimeout(
+                () =>
+                    document.dispatchEvent(
+                        new CustomEvent("jota:refreshConversations"),
+                    ),
+                1500,
+            );
+        } else {
+            service.sendMessage(text);
         }
     }
 
+    // ─── WS Callbacks ────────────────────────────────────────────────────────────
+    service.setCallbacks({
+        onOpen: () => {
+            setStatus("connected", "Conectado");
+            if (pendingMessage) {
+                service.sendMessage(pendingMessage);
+                pendingMessage = null;
+            }
+        },
+
+        onToken: (token) => {
+            removeTypingIndicator();
+            const target = currentMessageDiv ?? startBotMessage();
+            const raw = (target.dataset.raw ?? "") + token;
+            target.dataset.raw = raw;
+            const rendered = marked.parse(raw, { async: false });
+            target.innerHTML = typeof rendered === "string" ? rendered : raw;
+            scrollToBottom();
+        },
+
+        onEnd: (modelId) => {
+            if (currentMessageDiv && modelId)
+                attachModelBadge(currentMessageDiv, modelId);
+            currentMessageDiv = null;
+        },
+
+        onThought: (thought) => {
+            // Render collapsible thought block above the current response
+            removeTypingIndicator();
+            const target = currentMessageDiv ?? startBotMessage();
+            const thoughtEl = document.createElement("details");
+            thoughtEl.className = "thought-block";
+            thoughtEl.innerHTML = `<summary>Pensando…</summary><pre>${escapeHtml(thought)}</pre>`;
+            target.prepend(thoughtEl);
+            scrollToBottom();
+        },
+
+        onModelLoading: () => showTypingIndicator(true),
+
+        onModelError: (code, message) => {
+            removeTypingIndicator();
+            if (code === "AUTH_FAILED") {
+                setStatus("error", "Sin autorización");
+                showToast(
+                    "Autenticación rechazada. Comprueba la client key.",
+                    "error",
+                );
+            } else if (code === "ERROR_INFERENCE_IN_PROGRESS") {
+                showToast(
+                    "El motor está ocupado. Por favor espera.",
+                    "warning",
+                );
+                revertModel();
+            } else if (code === "MAX_RECONNECT_REACHED") {
+                setStatus("disconnected", "Sin conexión");
+                showToast("No se pudo conectar con el servidor.", "error");
+            } else {
+                showToast(`Error: ${message}`, "error");
+            }
+        },
+
+        onClose: () => {
+            // Only update status if not already reconnecting
+            if (statusEl?.dataset.status !== "reconnecting")
+                setStatus("disconnected");
+        },
+
+        onError: () => setStatus("error", "Error"),
+
+        onReconnecting: (attempt, max) => {
+            setStatus("reconnecting", `Reconectando (${attempt}/${max})…`);
+        },
+    });
+
+    // ─── DOM Helpers ─────────────────────────────────────────────────────────────
     function appendUserMessage(text: string) {
         const div = document.createElement("div");
         div.className = "message user";
@@ -220,14 +317,27 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
         scrollToBottom();
     }
 
-    function startBotMessage(): HTMLDivElement {
+    function createBotMessageDiv(): HTMLDivElement {
         const div = document.createElement("div");
         div.className = "message bot";
-        div.dataset.raw = ""; // Initialize raw text buffer
+        div.dataset.raw = "";
+        return div;
+    }
+
+    function startBotMessage(): HTMLDivElement {
+        const div = createBotMessageDiv();
         messagesDiv.appendChild(div);
         currentMessageDiv = div;
         scrollToBottom();
         return div;
+    }
+
+    function attachModelBadge(div: HTMLDivElement, modelId: string) {
+        if (div.querySelector(".model-badge")) return;
+        const badge = document.createElement("span");
+        badge.className = "model-badge";
+        badge.textContent = `Generado por: ${modelId}`;
+        div.appendChild(badge);
     }
 
     function appendSystemMessage(text: string) {
@@ -238,28 +348,238 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
         scrollToBottom();
     }
 
+    function escapeHtml(str: string) {
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
     function scrollToBottom() {
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
-    function showTypingIndicator() {
+    // ─── Typing / Loading Indicators ─────────────────────────────────────────────
+    function showTypingIndicator(isModelLoading = false) {
         if (typingIndicator) return;
-        isTyping = true;
         typingIndicator = document.createElement("div");
-        typingIndicator.className = "message bot typing-indicator";
-        typingIndicator.textContent = "Typing...";
+        typingIndicator.className =
+            "message bot typing-indicator" +
+            (isModelLoading ? " typing-indicator--loading" : "");
+        typingIndicator.innerHTML = isModelLoading
+            ? `<span class="pulse-dot"></span><span class="pulse-dot"></span><span class="pulse-dot"></span>
+               <span class="typing-indicator__label">Cargando pesos del modelo en memoria...</span>`
+            : `<span class="pulse-dot"></span><span class="pulse-dot"></span><span class="pulse-dot"></span>`;
         messagesDiv.appendChild(typingIndicator);
         scrollToBottom();
     }
 
     function removeTypingIndicator() {
-        if (typingIndicator) {
-            typingIndicator.remove();
-            typingIndicator = null;
-        }
-        isTyping = false;
+        typingIndicator?.remove();
+        typingIndicator = null;
     }
 
-    // Start
+    // ─── Toast ───────────────────────────────────────────────────────────────────
+    function showToast(
+        message: string,
+        type: "error" | "warning" | "info" = "info",
+    ) {
+        const host = document.getElementById("toast-container");
+        if (!host) return;
+        const toast = document.createElement("div");
+        toast.className = `toast toast--${type}`;
+        toast.textContent = message;
+        host.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.add("toast--visible"));
+        setTimeout(() => {
+            toast.classList.remove("toast--visible");
+            setTimeout(() => toast.remove(), 400);
+        }, 4000);
+    }
+
+    // ─── Event Listeners ─────────────────────────────────────────────────────────
+    sendBtn?.addEventListener("click", sendMessage);
+    inputEl?.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") sendMessage();
+    });
+
+    document.addEventListener("jota:loadConversation", async (e: any) => {
+        await switchConversation(e.detail.conversationId ?? null);
+    });
+
+    // ─── Init ────────────────────────────────────────────────────────────────────
+    async function init() {
+        await loadModels();
+        await switchConversation(null); // Start with empty chat, no WS connection yet
+    }
+
     init();
 </script>
+
+<style>
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        height: 100%;
+        background: #1e1e1e;
+        color: #e0e0e0;
+        overflow: hidden;
+        font-family: sans-serif;
+    }
+
+    /* Message bubbles */
+    :global(.message) {
+        padding: 10px 15px;
+        border-radius: 10px;
+        max-width: 80%;
+        line-height: 1.5;
+    }
+    :global(.message.user) {
+        align-self: flex-end;
+        background: #007acc;
+        color: #fff;
+    }
+    :global(.message.bot) {
+        align-self: flex-start;
+        background: #333;
+        color: #eee;
+    }
+    :global(.message.system) {
+        align-self: center;
+        background: transparent;
+        color: #888;
+        font-size: 0.8em;
+        text-align: center;
+    }
+
+    /* Markdown inside bot messages */
+    :global(.message.bot p) {
+        margin: 0.4em 0;
+    }
+    :global(.message.bot pre) {
+        background: #1e1e1e;
+        border-radius: 6px;
+        padding: 10px;
+        overflow-x: auto;
+        font-size: 0.85em;
+    }
+    :global(.message.bot code) {
+        background: #1e1e1e;
+        border-radius: 3px;
+        padding: 1px 4px;
+        font-size: 0.88em;
+    }
+
+    /* Model traceability badge */
+    :global(.model-badge) {
+        display: block;
+        margin-top: 6px;
+        font-size: 0.7em;
+        color: #555;
+        font-style: italic;
+    }
+
+    /* Thought block */
+    :global(.thought-block) {
+        background: #1a1a2e;
+        border: 1px solid #2a2a4a;
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-bottom: 8px;
+        font-size: 0.82em;
+        color: #8888cc;
+    }
+    :global(.thought-block summary) {
+        cursor: pointer;
+        color: #aaaaee;
+    }
+    :global(.thought-block pre) {
+        margin: 6px 0 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    /* Typing indicator */
+    :global(.typing-indicator) {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 12px 16px;
+    }
+    :global(.pulse-dot) {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #888;
+        animation: pulse 1.2s infinite ease-in-out;
+        flex-shrink: 0;
+    }
+    :global(.pulse-dot:nth-child(2)) {
+        animation-delay: 0.2s;
+    }
+    :global(.pulse-dot:nth-child(3)) {
+        animation-delay: 0.4s;
+    }
+    :global(.typing-indicator--loading .pulse-dot) {
+        background: #007acc;
+    }
+    :global(.typing-indicator__label) {
+        font-size: 0.82em;
+        color: #7ab8e8;
+        font-style: italic;
+        margin-left: 4px;
+    }
+
+    @keyframes pulse {
+        0%,
+        80%,
+        100% {
+            transform: scale(0.8);
+            opacity: 0.5;
+        }
+        40% {
+            transform: scale(1.2);
+            opacity: 1;
+        }
+    }
+
+    /* Toasts */
+    :global(.toast) {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 0.85em;
+        max-width: 320px;
+        line-height: 1.4;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        opacity: 0;
+        transform: translateY(10px);
+        transition:
+            opacity 0.35s ease,
+            transform 0.35s ease;
+        pointer-events: auto;
+    }
+    :global(.toast--visible) {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    :global(.toast--error) {
+        background: #3a1f1f;
+        border: 1px solid #7a2f2f;
+        color: #f08080;
+    }
+    :global(.toast--warning) {
+        background: #3a2e1a;
+        border: 1px solid #7a5a20;
+        color: #e0b060;
+    }
+    :global(.toast--info) {
+        background: #1a2a3a;
+        border: 1px solid #1a4a7a;
+        color: #60a0e0;
+    }
+</style>

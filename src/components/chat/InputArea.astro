@@ -1,0 +1,48 @@
+---
+// InputArea: text input and send button row at the bottom of the chat.
+// All event handling is wired by JS in ChatContainer.
+import Button from "../ui/Button.astro";
+---
+
+<div class="input-area">
+    <input
+        type="text"
+        id="chat-input"
+        class="input-area__input"
+        placeholder="Escribe un mensaje..."
+        autocomplete="off"
+    />
+    <Button id="send-btn" label="Enviar" variant="primary" />
+</div>
+
+<style>
+    .input-area {
+        display: flex;
+        align-items: center;
+        padding: 14px 20px;
+        background: #252526;
+        border-top: 1px solid #333;
+        gap: 10px;
+        flex-shrink: 0;
+    }
+
+    .input-area__input {
+        flex: 1;
+        padding: 10px 14px;
+        border-radius: 6px;
+        border: 1px solid #444;
+        background: #1e1e1e;
+        color: #e0e0e0;
+        font-size: 0.9em;
+        transition: border-color 0.2s;
+    }
+
+    .input-area__input:focus {
+        outline: none;
+        border-color: #007acc;
+    }
+
+    .input-area__input::placeholder {
+        color: #666;
+    }
+</style>

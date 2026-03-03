@@ -57,7 +57,7 @@
     };
   }
 
-  function appendSystemMessage(text) {
+  function appendSystemMessage(text: string) {
     const div = document.createElement("div");
     div.className = "message system";
     div.textContent = text;
@@ -65,7 +65,7 @@
     scrollToBottom();
   }
 
-  function appendUserMessage(text) {
+  function appendUserMessage(text: string) {
     const div = document.createElement("div");
     div.className = "message user";
     div.textContent = text;

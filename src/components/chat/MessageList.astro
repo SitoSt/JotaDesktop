@@ -1,0 +1,17 @@
+---
+// MessageList: scrollable container for all message bubbles.
+// JS clears and appends MessageItem-structured divs here dynamically.
+---
+
+<div id="chat-messages" class="message-list"></div>
+
+<style>
+    .message-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+</style>

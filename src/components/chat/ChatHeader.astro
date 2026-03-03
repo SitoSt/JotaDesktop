@@ -1,0 +1,57 @@
+---
+// ChatHeader: top bar that hosts the model selector and connection status.
+// Data population handled externally by JS.
+import ModelSelector from "./ModelSelector.astro";
+import ConnectionStatus from "./ConnectionStatus.astro";
+---
+
+<div class="chat-header">
+    <div class="chat-header__brand">
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+        >
+            <path
+                d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+            ></path>
+        </svg>
+        <span class="chat-header__title">Jota</span>
+        <ConnectionStatus />
+    </div>
+
+    <ModelSelector />
+</div>
+
+<style>
+    .chat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 16px;
+        background: #252526;
+        border-bottom: 1px solid #333;
+        min-height: 48px;
+        flex-shrink: 0;
+    }
+
+    .chat-header__brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #007acc;
+    }
+
+    .chat-header__title {
+        font-size: 0.95em;
+        font-weight: 600;
+        color: #e0e0e0;
+        letter-spacing: 0.04em;
+    }
+</style>

@@ -1,138 +1,159 @@
 ---
-// Connection established strictly through client-side scripting to prevent Astro dev hydration issues on SSR
+import ConversationList from "./ConversationList.astro";
+import Button from "../ui/Button.astro";
 ---
 
 <div class="conversation-sidebar" id="conversation-sidebar">
     <div class="sidebar-header">
-        <h2>Historial</h2>
-        <button id="new-chat-btn" class="new-chat-btn">
+        <h2 class="sidebar-header__title">Historial</h2>
+        <Button
+            id="new-chat-btn"
+            label="Nueva Charla"
+            variant="primary"
+            fullWidth
+        >
             <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
+                width="14"
+                height="14"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                ><line x1="12" y1="5" x2="12" y2="19"></line><line
-                    x1="5"
-                    y1="12"
-                    x2="19"
-                    y2="12"></line></svg
             >
-            Nueva Charla
-        </button>
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+        </Button>
     </div>
-    <div class="conversation-list" id="conversation-list">
-        <!-- Rendered via JS -->
-        <div class="loading-state">Cargando...</div>
-    </div>
+
+    <ConversationList />
 </div>
 
 <script>
-    import { apiService } from "../../services/jotaApiService";
+    import { JotaApiService, type Conversation } from "../../services/api";
 
-    // Obtain configuration
-    const container = document.querySelector(".chat-container") as HTMLElement;
-    const initialUserId = container?.dataset?.initialUserId || "";
-    let userId = initialUserId || localStorage.getItem("jota_user_id");
+    // ── Bootstrap: read config injected by ChatContainer ──────────────────────
+    const chatContainer = document.querySelector(
+        ".chat-container",
+    ) as HTMLElement | null;
+    const apiUrl = chatContainer?.dataset.apiUrl ?? "";
+    const clientKey = chatContainer?.dataset.clientKey ?? "";
+    const userId =
+        localStorage.getItem("jota_user_id") ||
+        chatContainer?.dataset.initialUserId ||
+        "";
 
-    const listContainer = document.getElementById(
+    const api = new JotaApiService(apiUrl, clientKey);
+
+    // ── DOM refs ──────────────────────────────────────────────────────────────
+    const listEl = document.getElementById(
         "conversation-list",
     ) as HTMLDivElement;
     const newChatBtn = document.getElementById(
         "new-chat-btn",
     ) as HTMLButtonElement;
-    let currentConversationId: string | null = null;
+
+    let activeConversationId: string | null = null;
     let isLoaded = false;
 
-    // Listen to custom event when a conversation is activated (from ChatContainer)
-    document.addEventListener("jota:conversationChanged", (e: any) => {
-        currentConversationId = e.detail.conversationId;
-        updateActiveState();
-    });
-
+    // ── Load & render conversations ───────────────────────────────────────────
     async function loadConversations() {
-        if (!userId) return;
-
-        try {
-            const conversations = await apiService.getConversations(userId, 50);
-            renderConversations(conversations);
-            isLoaded = true;
-        } catch (e) {
-            console.error("Failed to load sidebar", e);
-            listContainer.innerHTML =
-                '<div class="error-state">Error al cargar historial</div>';
-        }
-    }
-
-    function renderConversations(conversations: any[]) {
-        if (!conversations || conversations.length === 0) {
-            listContainer.innerHTML =
-                '<div class="empty-state">No hay conversaciones pasadas</div>';
+        if (!userId || !apiUrl) {
+            listEl.innerHTML =
+                '<div class="conversation-list__error">Sin configuración</div>';
             return;
         }
 
-        listContainer.innerHTML = "";
-        conversations.forEach((conv) => {
-            const div = document.createElement("div");
-            div.className = "conversation-item";
-            if (conv.id == currentConversationId) div.classList.add("active");
-            div.dataset.id = conv.id;
+        listEl.innerHTML =
+            '<div class="conversation-list__loading">Cargando...</div>';
 
-            // Format title/date
-            const dateObj = new Date(conv.created_at);
-            const dateStr = dateObj.toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-            });
+        const conversations = await api.conversations.getConversations(
+            userId,
+            50,
+        );
 
-            const titleSpan = document.createElement("span");
-            titleSpan.className = "conv-title";
-            titleSpan.textContent = conv.title || "Nueva conversación";
+        if (conversations.length === 0) {
+            listEl.innerHTML =
+                '<div class="conversation-list__empty">No hay conversaciones</div>';
+            isLoaded = true;
+            return;
+        }
 
-            const dateSpan = document.createElement("span");
-            dateSpan.className = "conv-date";
-            dateSpan.textContent = dateStr;
-
-            div.appendChild(titleSpan);
-            div.appendChild(dateSpan);
-
-            div.addEventListener("click", () => {
-                if (currentConversationId == conv.id) return; // Already active
-
-                // Dispatch event to ChatContainer to load this conversation
-                document.dispatchEvent(
-                    new CustomEvent("jota:loadConversation", {
-                        detail: { conversationId: conv.id },
-                    }),
-                );
-            });
-
-            listContainer.appendChild(div);
-        });
+        renderConversations(conversations);
     }
 
-    function updateActiveState() {
+    function renderConversations(conversations: Conversation[]) {
+        listEl.innerHTML = "";
+        isLoaded = true;
+
+        for (const conv of conversations) {
+            const item = document.createElement("div");
+            item.className =
+                "conversation-item" +
+                (conv.id === activeConversationId ? " active" : "");
+            item.dataset.id = conv.id;
+            item.role = "button";
+            item.tabIndex = 0;
+
+            const date = new Date(conv.created_at).toLocaleDateString(
+                undefined,
+                {
+                    month: "short",
+                    day: "numeric",
+                },
+            );
+
+            const modelBadge = conv.model_id
+                ? `<span class="conv-model-badge">${conv.model_id}</span>`
+                : "";
+
+            item.innerHTML = `
+                <svg class="conversation-item__icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <div class="conversation-item__content">
+                    <span class="conversation-item__title">${conv.title ?? "Nueva conversación"}</span>
+                    <div class="conv-meta">
+                        <span class="conversation-item__date">${date}</span>
+                        ${modelBadge}
+                    </div>
+                </div>`;
+
+            item.addEventListener("click", () => selectConversation(conv.id));
+            item.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ")
+                    selectConversation(conv.id);
+            });
+
+            listEl.appendChild(item);
+        }
+    }
+
+    function selectConversation(id: string) {
+        if (id === activeConversationId) return;
+        document.dispatchEvent(
+            new CustomEvent("jota:loadConversation", {
+                detail: { conversationId: id },
+            }),
+        );
+    }
+
+    function updateActiveItem(id: string | null) {
         if (!isLoaded) return;
-        const items = listContainer.querySelectorAll(".conversation-item");
-        items.forEach((item) => {
-            if ((item as HTMLElement).dataset.id == currentConversationId) {
-                item.classList.add("active");
-            } else {
-                item.classList.remove("active");
-            }
-        });
+        listEl
+            .querySelectorAll<HTMLDivElement>(".conversation-item")
+            .forEach((item) => {
+                item.classList.toggle("active", item.dataset.id === id);
+            });
     }
 
-    newChatBtn.addEventListener("click", () => {
-        if (!currentConversationId) return; // Already starting a new one usually
-
-        // Tells ChatContainer to drop current context and start fresh
+    // ── Events ────────────────────────────────────────────────────────────────
+    newChatBtn?.addEventListener("click", () => {
         document.dispatchEvent(
             new CustomEvent("jota:loadConversation", {
                 detail: { conversationId: null },
@@ -140,15 +161,17 @@
         );
     });
 
-    // Initial load
-    // Timeout added just to let main script setup first and prevent race conditions with JotaService init
-    setTimeout(loadConversations, 100);
-
-    // Refresh list when a new message is first sent in a new conversation?
-    // Listen to "jota:refreshConversations"
-    document.addEventListener("jota:refreshConversations", () => {
-        loadConversations();
+    document.addEventListener("jota:conversationChanged", (e: any) => {
+        activeConversationId = e.detail.conversationId ?? null;
+        updateActiveItem(activeConversationId);
     });
+
+    document.addEventListener("jota:refreshConversations", () =>
+        loadConversations(),
+    );
+
+    // ── Init (slight delay to let ChatContainer write user info first) ─────────
+    setTimeout(loadConversations, 120);
 </script>
 
 <style>
@@ -160,6 +183,7 @@
         flex-direction: column;
         height: 100%;
         overflow: hidden;
+        flex-shrink: 0;
     }
 
     .sidebar-header {
@@ -170,80 +194,88 @@
         border-bottom: 1px solid #333;
     }
 
-    .sidebar-header h2 {
+    .sidebar-header__title {
         margin: 0;
-        font-size: 1.1em;
-        font-weight: 500;
+        font-size: 1.05em;
+        font-weight: 600;
         color: #e0e0e0;
     }
 
-    .new-chat-btn {
-        width: 100%;
+    /* Conversation item styles (rendered via JS) */
+    :global(.conversation-item) {
+        padding: 11px 14px;
+        border-radius: 8px;
+        cursor: pointer;
         display: flex;
+        flex-direction: row;
         align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 10px;
-        background: #007acc;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-weight: 500;
-        transition: background 0.2s;
+        gap: 12px;
+        transition: all 0.18s ease;
+        border: 1px solid transparent;
+        outline: none;
     }
 
-    .new-chat-btn:hover {
-        background: #0062a3;
+    :global(.conversation-item:hover) {
+        background: #2d2d30;
+    }
+    :global(.conversation-item:focus-visible) {
+        border-color: #007acc;
     }
 
-    .conversation-list {
-        flex: 1;
-        overflow-y: auto;
-        padding: 8px;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    .conversation-item {
-        padding: 12px;
-        border-radius: 6px;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        transition: background 0.2s;
-    }
-
-    .conversation-item:hover {
-        background: #333;
-    }
-
-    .conversation-item.active {
+    :global(.conversation-item.active) {
         background: #37373d;
-        border-left: 3px solid #007acc;
+        border-color: #454545;
     }
 
-    .conv-title {
-        font-size: 0.9em;
+    :global(.conversation-item__icon) {
+        color: #888;
+        flex-shrink: 0;
+    }
+    :global(.conversation-item.active .conversation-item__icon) {
+        color: #007acc;
+    }
+
+    :global(.conversation-item__content) {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        flex: 1;
+        gap: 3px;
+    }
+
+    :global(.conversation-item__title) {
+        font-size: 0.88em;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        color: #eee;
+        color: #e0e0e0;
+        font-weight: 500;
     }
 
-    .conv-date {
-        font-size: 0.75em;
-        color: #888;
+    :global(.conversation-item.active .conversation-item__title) {
+        color: #fff;
     }
 
-    .loading-state,
-    .empty-state,
-    .error-state {
-        padding: 20px;
-        text-align: center;
-        color: #888;
-        font-size: 0.9em;
+    :global(.conv-meta) {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    :global(.conversation-item__date) {
+        font-size: 0.72em;
+        color: #858585;
+    }
+
+    :global(.conv-model-badge) {
+        font-size: 0.65em;
+        color: #007acc;
+        background: #1a2e40;
+        border-radius: 3px;
+        padding: 1px 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 90px;
     }
 </style>

@@ -1,0 +1,98 @@
+---
+// ConversationItem: single entry in the conversation history sidebar list.
+// JS dispatches a custom event on click; this component just defines the structure.
+
+interface Props {
+    id: string;
+    title?: string;
+    date: string;
+    active?: boolean;
+}
+
+const { id, title = "Nueva conversación", date, active = false } = Astro.props;
+---
+
+<div
+    class:list={["conversation-item", { active }]}
+    data-id={id}
+    role="button"
+    tabindex="0"
+>
+    <svg
+        class="conversation-item__icon"
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+    >
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+        ></path>
+    </svg>
+    <div class="conversation-item__content">
+        <span class="conversation-item__title">{title}</span>
+        <span class="conversation-item__date">{date}</span>
+    </div>
+</div>
+
+<style>
+    .conversation-item {
+        padding: 12px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+        transition: all 0.2s ease;
+        border: 1px solid transparent;
+    }
+
+    .conversation-item:hover {
+        background: #2d2d30;
+    }
+
+    .conversation-item.active {
+        background: #37373d;
+        border-color: #454545;
+    }
+
+    .conversation-item__icon {
+        color: #888;
+        flex-shrink: 0;
+    }
+
+    .conversation-item.active .conversation-item__icon {
+        color: #007acc;
+    }
+
+    .conversation-item__content {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        flex: 1;
+        gap: 3px;
+    }
+
+    .conversation-item__title {
+        font-size: 0.88em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #e0e0e0;
+        font-weight: 500;
+    }
+
+    .conversation-item.active .conversation-item__title {
+        color: #fff;
+    }
+
+    .conversation-item__date {
+        font-size: 0.72em;
+        color: #858585;
+    }
+</style>

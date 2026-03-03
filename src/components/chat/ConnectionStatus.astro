@@ -1,0 +1,101 @@
+---
+// ConnectionStatus: compact indicator in the chat header showing WS connection state.
+// JS drives this by setting the data-status attribute on #connection-status.
+// Possible values: "connected" | "disconnected" | "reconnecting"
+---
+
+<div
+    id="connection-status"
+    class="connection-status"
+    data-status="disconnected"
+    title="Estado de conexión"
+>
+    <span class="connection-status__dot"></span>
+    <span class="connection-status__label"></span>
+</div>
+
+<style>
+    .connection-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        background: transparent;
+        border: 1px solid transparent;
+        transition: all 0.3s ease;
+        font-size: 0.75em;
+        font-weight: 500;
+        color: #888;
+        user-select: none;
+    }
+
+    /* ── Dot ──────────────────────────────────────────────────────────────── */
+    .connection-status__dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #555;
+        flex-shrink: 0;
+        transition: background 0.3s ease;
+    }
+
+    /* ── Label (set via JS) ────────────────────────────────────────────────── */
+    .connection-status__label {
+        white-space: nowrap;
+        transition: color 0.3s ease;
+    }
+
+    /* ── Connected ─────────────────────────────────────────────────────────── */
+    .connection-status[data-status="connected"] {
+        color: #4caf7d;
+        border-color: #1e3d2a;
+        background: #1a2e22;
+    }
+    .connection-status[data-status="connected"] .connection-status__dot {
+        background: #4caf7d;
+    }
+
+    /* ── Reconnecting ──────────────────────────────────────────────────────── */
+    .connection-status[data-status="reconnecting"] {
+        color: #e0b060;
+        border-color: #4a3a10;
+        background: #2e2410;
+    }
+    .connection-status[data-status="reconnecting"] .connection-status__dot {
+        background: #e0b060;
+        animation: pulse-dot 1.2s infinite ease-in-out;
+    }
+
+    /* ── Disconnected ──────────────────────────────────────────────────────── */
+    .connection-status[data-status="disconnected"] {
+        color: #888;
+        border-color: transparent;
+        background: transparent;
+    }
+    .connection-status[data-status="disconnected"] .connection-status__dot {
+        background: #555;
+    }
+
+    /* ── Error ─────────────────────────────────────────────────────────────── */
+    .connection-status[data-status="error"] {
+        color: #e06060;
+        border-color: #4a1010;
+        background: #2e1010;
+    }
+    .connection-status[data-status="error"] .connection-status__dot {
+        background: #e06060;
+    }
+
+    @keyframes pulse-dot {
+        0%,
+        100% {
+            opacity: 0.4;
+            transform: scale(0.85);
+        }
+        50% {
+            opacity: 1;
+            transform: scale(1.15);
+        }
+    }
+</style>

@@ -1,0 +1,86 @@
+---
+interface Props {
+    id?: string;
+    label: string;
+    variant?: "primary" | "secondary" | "ghost";
+    disabled?: boolean;
+    fullWidth?: boolean;
+    type?: "button" | "submit";
+}
+
+const {
+    id,
+    label,
+    variant = "primary",
+    disabled = false,
+    fullWidth = false,
+    type = "button",
+} = Astro.props;
+---
+
+<button
+    id={id}
+    type={type}
+    class:list={["btn", `btn--${variant}`, { "btn--full": fullWidth }]}
+    disabled={disabled}
+>
+    <slot />{label}
+</button>
+
+<style>
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.9em;
+        font-weight: 500;
+        cursor: pointer;
+        transition:
+            background 0.2s,
+            opacity 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn--full {
+        width: 100%;
+    }
+
+    .btn--primary {
+        background: #007acc;
+        color: #fff;
+    }
+
+    .btn--primary:hover:not(:disabled) {
+        background: #0062a3;
+    }
+
+    .btn--secondary {
+        background: #37373d;
+        color: #e0e0e0;
+        border: 1px solid #444;
+    }
+
+    .btn--secondary:hover:not(:disabled) {
+        background: #454545;
+    }
+
+    .btn--ghost {
+        background: transparent;
+        color: #aaa;
+        border: 1px solid transparent;
+    }
+
+    .btn--ghost:hover:not(:disabled) {
+        background: #2d2d30;
+        color: #e0e0e0;
+    }
+
+    .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+</style>
