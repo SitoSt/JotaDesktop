@@ -3,7 +3,7 @@
  *
  * Manages the persistent WebSocket connection to JotaOrchestrator.
  *
- * Endpoint: `ws(s)://host/ws/chat/{user_id}`
+ * Endpoint: `ws(s)://host/ws/{user_id}`
  *
  * Features:
  * - Authentication via `x_client_key` query parameter (browser can't set custom
@@ -101,7 +101,7 @@ export class JotaWebSocket {
 
         // Derive WS URL from HTTP base — no hardcoded host
         const wsBase = this.baseUrl.replace(/^http/, "ws");
-        const url = `${wsBase}/ws/chat/${encodeURIComponent(this.userId)}?${params}`;
+        const url = `${wsBase}/ws/${encodeURIComponent(this.userId)}?${params}`;
 
         try {
             this.ws = new WebSocket(url);

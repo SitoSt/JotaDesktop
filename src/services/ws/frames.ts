@@ -2,7 +2,7 @@
  * @module services/ws/frames
  *
  * Type definitions for all JSON frames sent by JotaOrchestrator over the
- * WebSocket connection (`/ws/chat/{user_id}`).
+ * WebSocket connection (`/ws/{user_id}`).
  *
  * The WebSocket stream carries two kinds of messages:
  * 1. **Plain text tokens** — fragments of the AI response, delivered as-is.

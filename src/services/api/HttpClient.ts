@@ -12,7 +12,7 @@
  * Usage:
  * ```ts
  * const http = new HttpClient("http://green-house.local/api/jota", clientKey);
- * const data = await http.get<MyType>("/chat/models");
+ * const data = await http.get<MyType>("/models");
  * ```
  */
 export class HttpClient {

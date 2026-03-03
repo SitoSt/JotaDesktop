@@ -129,6 +129,10 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
         selectedModelId = newId;
         service.setModelId(newId);
 
+        // Reconnect WS to notify backend of the new model (model_id is sent in
+        // the URL query params at connect time). The backend will also update the
+        // DB model_id from the WS URL on reconnect, so the PATCH below is a
+        // belt-and-suspenders fallback for REST-only clients.
         if (currentConversationId) {
             const ok = await api.conversations.updateModel(
                 currentConversationId,
@@ -139,10 +143,10 @@ const initialUserId = import.meta.env.JOTA_USER_ID || "";
                     "No se pudo actualizar el modelo en el servidor.",
                     "warning",
                 );
-        }
 
-        // Reconnect WS so next message uses the new model
-        if (currentConversationId && service.isConnected) {
+            // Reconnect regardless of whether socket was open — the new
+            // model_id is embedded in the URL, so a fresh handshake is
+            // always required to pick it up.
             service.disconnect(true);
             setTimeout(() => service.connect(), 200);
         }
